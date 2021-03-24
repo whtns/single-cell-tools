@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "single-cell-tools"
+version = "0.1.0"
+description = "A package for pseudotime and dimension reduction by cluster centroids"
+authors = ["Kevin Stachelek"]
+license = "MIT"
+readme = "README.md"
+documentation = "https://single-cell-tools.readthedocs.io/en/latest/"
+homepage = "https://github.com/whtns/single-cell-tools"
+repository = "https://github.com/whtns/single-cell-tools"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
