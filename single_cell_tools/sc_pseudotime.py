@@ -64,27 +64,6 @@ accepted_sets_without_parameter = ["remove", "superimpose", "superimpose-for-spe
 ## parameters supposed to be set once
 accepted_parameters = ["number_of_genes"]
 
-def get_spaced_rgb(n):
-    max_value = 16581375 #255**3
-    interval = int(max_value / n)
-    colors = [hex(I)[2:].zfill(6) for I in range(0, max_value, interval)]
-
-    return [(int(i[:2], 16), int(i[2:4], 16), int(i[4:], 16)) for i in colors]
-
-def RGBToHTMLColor(rgb_tuple):
-    """ convert an (R, G, B) tuple to #RRGGBB """
-    hexcolor = '#%02x%02x%02x' % rgb_tuple
-    # that's it! '%02x' means zero-padded, 2-digit hex values
-    return hexcolor
-    
-def read_cell_sets(cellset_file):
-    
-    cell_sets = {}
-    with open(cellset_file, 'rU') as f:
-        for line in f:
-            x = line.rstrip().split("\t")
-            cell_sets[x[0]] = x[1:]
-    return cell_sets    
 
 ## this class reads settings of the run and keeps them in its attributes
 #  if settings file in incorrect, the init method prints error and terminates application
@@ -210,7 +189,30 @@ class settings:
             # ~ else:
                 # ~ print ("Unknown option:",line)
             # ~ exit(1)
-            
+
+
+def get_spaced_rgb(n):
+    max_value = 16581375 #255**3
+    interval = int(max_value / n)
+    colors = [hex(I)[2:].zfill(6) for I in range(0, max_value, interval)]
+
+    return [(int(i[:2], 16), int(i[2:4], 16), int(i[4:], 16)) for i in colors]
+
+def RGBToHTMLColor(rgb_tuple):
+    """ convert an (R, G, B) tuple to #RRGGBB """
+    hexcolor = '#%02x%02x%02x' % rgb_tuple
+    # that's it! '%02x' means zero-padded, 2-digit hex values
+    return hexcolor
+
+def read_cell_sets(cellset_file):
+
+    cell_sets = {}
+    with open(cellset_file, 'rU') as f:
+        for line in f:
+            x = line.rstrip().split("\t")
+            cell_sets[x[0]] = x[1:]
+    return cell_sets
+
 ## function takes expression file and settings object and returns:
 # - pd.DataFrame with [log transformed] expression values [genes expressed over min_expression in at least min_cells]
 # - pd.DataFrame with annotations for each cell. Expression table and annotation table have the same rows
@@ -219,7 +221,7 @@ def read_expression(expression_file, settings, min_expression = 0.1, min_cells =
     expression_table = pd.read_csv(expression_file, sep=",", index_col = 0).transpose()
     expression_table = expression_table.dropna(axis = 'columns')
     print ("Read expression table with shape:",expression_table.shape)
-    
+
     # remove genes with less then min_cells expressing them
     expressed_genes = (expression_table > min_expression).sum() > min_cells
     # store removed features in settings.removed_features
@@ -227,20 +229,22 @@ def read_expression(expression_file, settings, min_expression = 0.1, min_cells =
     settings.removed_features = expressed_genes.iloc[false_indices].index
     expression_table = expression_table.loc[ : , expressed_genes]
     print ("Removed genes that are not expressed >",min_expression," in at least",min_cells ,"cells")
-    # ~ settings.removed_genes = 
-    print ("Expression table has now shape:",expression_table.shape)
-    
-    # remove unwanted cells
-    for s in settings.sets["remove"]:
-        print ("Removed cells from set:",s,settings.cell_sets[s])
-        expression_table.drop(settings.cell_sets[s], inplace=True, errors="ignore")
 
     # log transform
     if(log_transform):
         expression_table += 1
         expression_table = expression_table.apply(np.log2)
         print ("Log transformed data")
-    
+
+    print ("Expression table has now shape:",expression_table.shape)
+
+
+
+    # remove unwanted cells
+    for s in settings.sets["remove"]:
+        print ("Removed cells from set:",s,settings.cell_sets[s])
+        expression_table.drop(settings.cell_sets[s], inplace=True, errors="ignore")
+
     # create annotation table and populate it with default values
     annotation = pd.DataFrame(index=expression_table.index)
     annotation["color"] = default_color
@@ -253,24 +257,24 @@ def read_expression(expression_file, settings, min_expression = 0.1, min_cells =
     annotation["shape"] = default_shape
     annotation["treatment"]= "none"
     annotation["cluster"]= "none"
-    
+
     # annotate superimposed cells
     for s in settings.sets["superimpose"]:
         print ("Superimposing cells from set:",s,settings.cell_sets[s])
         for i in settings.cell_sets[s]:
             annotation.loc[i,"superimpose"] = "True"
-        
 
-    
+
+
     for s in accepted_sets_with_parameter: # iterating over dictionary operation->set
         for i in settings.sets[s]: # iterating over set
             subset = set(settings.cell_sets[i[0]]).intersection(annotation.index)
             annotation.loc[subset,s] = i[1]
-    
+
     annotation["size"] = pd.to_numeric(annotation["size"])
     # where outline color was not defined, set it to the color of the cell
     annotation.loc[annotation["outline-color"]!=annotation["outline-color"], "outline-color"] = annotation["color"]
-    
+
     # define day, treatment, and cluster columns
     day_labels = [d for d in settings.cell_sets if d.startswith(time_group_prefix)]
     treatment_labels = [t for t in settings.cell_sets if t.startswith(treatment_group_prefix)]
@@ -284,19 +288,40 @@ def read_expression(expression_file, settings, min_expression = 0.1, min_cells =
     for i in cluster_labels:
         subset = set(settings.cell_sets[i]).intersection(annotation.index)
         annotation.loc[subset,"cluster"]=i.split("_")[1]
-    
+
     # crop annotation dataframe to only rows, that are in expression table
     annotation = annotation.loc[expression_table.index]
     return (expression_table, annotation)
+
+## function takes expression file and settings object and returns:
+# - pd.DataFrame with [log transformed] expression values [genes expressed over min_expression in at least min_cells]
+# - pd.DataFrame with annotations for each cell. Expression table and annotation table have the same rows
+def read_expression_from_table(expression_table, min_expression = 0.1, min_cells = 10, log_transform = True):
+
+    expression_table = expression_table.dropna(axis = 'columns')
+    print ("Read expression table with shape:",expression_table.shape)
+
+    # remove genes with less then min_cells expressing them
+    expressed_genes = (expression_table > min_expression).sum() > min_cells
+    expression_table = expression_table.loc[ : , expressed_genes]
+    print ("Removed genes that are not expressed >",min_expression," in at least",min_cells ,"cells")
+
+    # log transform
+    if(log_transform):
+        expression_table += 1
+        expression_table = expression_table.apply(np.log2)
+        print ("Log transformed data")
+
+    return (expression_table)
 
 ## runs PCA and returns:
 # - PCA transformed coordinates
 # - sklearn.decomposition.pca object
 def run_PCA(expression_table, annotation, n_components):
-    
+
     pca = decomposition.PCA(n_components=n_components, svd_solver="full")
     expression_table_for_PCA = expression_table.loc[annotation[annotation["superimpose"]==False].index]
-    #~ 
+    #~
     print ("Calculating PCA on table of shape:",expression_table_for_PCA.shape)
     pca.fit(expression_table_for_PCA)
     print ("Explained variance: ", pca.explained_variance_)
@@ -313,7 +338,7 @@ def run_PCA(expression_table, annotation, n_components):
     # ~ csv_filename = filename+"_PC"+str(pc)+".csv"
     # ~ df.to_csv(csv_filename, sep="\t")
     # ~ return df
-    
+
 # ~ def get_isoforms_correlated_pc_set(pca, expression_table, pcs, n, filename):
     # ~ data = [get_isoforms_correlated_with_pc(i) for i in pcs]
     # ~ pd.concat(data)
@@ -331,15 +356,15 @@ def annotate_df(row,df,min_dist,ax):
         dist = (df - row).abs().sum(axis=1).sort_values()[1]
         if(dist > min_dist):
             ax.annotate(row.name, list(row.values),
-                xytext=(5,-3), 
+                xytext=(5,-3),
                 textcoords='offset points',
-                size=10, 
+                size=10,
                 color='darkslategrey')
 
 ## create plot of 6 PC combinations
 # PC1 vs PC2, PC3 vs PC4 etc.
-# arguments are: 
-# - pd.DataFrame with PCA transformed gene expression 
+# arguments are:
+# - pd.DataFrame with PCA transformed gene expression
 # - annotation pd.DataFrame
 # - pca sklearn.decomposition object
 # - settings object
@@ -362,7 +387,7 @@ def plot_2d_pca_multiplot(transformed_expression, annotation, pca, settings):
                 #edgecolor="black",
                 marker = shape_plotly2matplotlib(m)
             )
-        
+
         explained_variance1 = "{0:.2f}".format(pca.explained_variance_ratio_[pc]*100)+"%"
         explained_variance2 = "{0:.2f}".format(pca.explained_variance_ratio_[pc+1]*100)+"%"
         ax[pc/6][(pc/2)%3].set_xlabel("PCA "+str(pc+1)+" ["+explained_variance1+" of variance]")
@@ -375,7 +400,7 @@ def plot_2d_pca_multiplot(transformed_expression, annotation, pca, settings):
 
 ## plot cells of defined pair of PCs
 # arguments are:
-# - pd.DataFrame with PCA transformed gene expression 
+# - pd.DataFrame with PCA transformed gene expression
 # - annotation pd.DataFrame
 # - pca sklearn.decomposition object
 # - settings object
@@ -400,7 +425,7 @@ def plot_2d_pca_single_plot(transformed_expression, annotation, pca, settings, f
         row = transformed_expression.loc[cell,[int(settings.pcs[0]),int(settings.pcs[1])]]
         df  = transformed_expression.loc[ :  ,[int(settings.pcs[0]),int(settings.pcs[1])]]
         annotate_df(row, df, 8.0, ax)
-    
+
     #ax.set_xlim([-100,100])
     #ax.set_ylim([-100,100])
     ax.set_aspect("equal", adjustable="box")
@@ -416,12 +441,12 @@ def plot_2d_pca_single_plot(transformed_expression, annotation, pca, settings, f
 ## record centroids
 # arguments are:
 # - clusters
-# - comb 
+# - comb
 # - settings object
 def record_trace(clusters, comb, settings, centroids=None):
 
     test_centroids = centroids #testthis
-    
+
     used_centroids = test_centroids.transpose().iloc[:,[i - 1 for i in settings.pcs]]
     used_centroids.columns = ["x","y","z"]
     used_centroids["color"] = "black"
@@ -429,7 +454,7 @@ def record_trace(clusters, comb, settings, centroids=None):
     colors = []
     for i,c in enumerate(clusters):
         colors += [comb.loc[c[1][0],"color"]]
-    
+
     trace = dict(
         name = "centroids",
         x=used_centroids["x"],
@@ -439,7 +464,7 @@ def record_trace(clusters, comb, settings, centroids=None):
         mode = 'lines+markers',
         line = dict(
             width = 6,
-            color = "black", 
+            color = "black",
             shape = "spline"
         ),
         marker = dict(
@@ -448,8 +473,8 @@ def record_trace(clusters, comb, settings, centroids=None):
             symbol=["x"]*used_centroids.shape[0], #c[1]["shape"],
             line=dict(width=1) )
         )
-        
-    #     
+
+    #
     return(trace)
 
 def shape_matplotlib2plotly(s):
@@ -471,7 +496,7 @@ def shape_matplotlib2plotly(s):
             return "star"
         else:
             return "circle"
-            
+
 def shape_plotly2matplotlib(s):
         if(s=="circle"):
             return "o"
@@ -494,11 +519,11 @@ def shape_plotly2matplotlib(s):
 
 ## color 3d pca plot by quantile
 # arguments are:
-# - dataframe of expression for all transcripts of given feature 
-# - combined expression matrix and annotation data 
+# - dataframe of expression for all transcripts of given feature
+# - combined expression matrix and annotation data
 # - dictionary linking bins to colors
 def color_by_quantile(trx_df, comb, bin_col_dict):
-    # 
+    #
     number_of_bins = len(bin_col_dict.keys())
     bin_labels=bin_col_dict.keys()
     bin_quantiles = pd.cut(trx_df.trx_count, number_of_bins, labels=bin_labels, retbins=True)
@@ -512,17 +537,17 @@ def color_by_quantile(trx_df, comb, bin_col_dict):
     comb['name'] = trx_df['range']
     # ~ traces = comb["name"].unique.sort_values()
     traces = bin_range_dict.values()
-    return(comb, traces) 
-    
+    return(comb, traces)
+
 def color_by_value(trx_df, comb):
   comb['color'] = trx_df.trx_count
   comb['name'] = "expression"
   traces = ['expression']
   return(comb, traces)
-                
+
 ## create 3d PCA plot using plotly library
 # arguments are:
-# - pd.DataFrame with PCA transformed gene expression 
+# - pd.DataFrame with PCA transformed gene expression
 # - annotation pd.DataFrame
 # - settings object
 def plot_3d_pca(transformed_expression, annotation, settings, expression_table=None, clusters=None, centroids=None, bin_col_dict=None, height = 1080, width = 1600, features=None, feat_type="gene", DEBUG=False):
@@ -567,19 +592,20 @@ def plot_3d_pca(transformed_expression, annotation, settings, expression_table=N
             aspectmode = 'manual'
         ),
     )
-    # 
+    #
     comb = pd.concat([transformed_expression, annotation], axis=1)
     #comb["name"] = comb["shape"]
     if "name" not in comb.columns:
         comb["name"] = comb["color"]+"_"+comb["shape"]
     traces = comb["name"].unique()
+
     # allow coloring cells by quantile expression of supplied features
     if (feat_type == "g"):
         if (features is not None):
-          
+
           markers = list(annotation["shape"].unique())
           mg = mygene.MyGeneInfo()
-          # ~ for i in enumerate(features): 
+          # ~ for i in enumerate(features):
           gene_info = mg.querymany(features, scopes='symbol', fields='ensembl.transcript')[0]
           if len(gene_info['ensembl']['transcript']) > 1:
               trx = gene_info['ensembl']['transcript']
@@ -599,29 +625,30 @@ def plot_3d_pca(transformed_expression, annotation, settings, expression_table=N
                   #~ sum_trx = sub_trx.loc[:,trx].sum(axis=1)
               else:
                   sum_trx = expression_table.loc[:,trx]
-              
+
               # color by quantile
               trx_df = sum_trx.to_frame('trx_count')
               # comb, traces = color_by_quantile(trx_df, comb, bin_col_dict)
               comb, traces = color_by_value(trx_df, comb)
-            
+
     if (feat_type == "t"):
-        
-        # ~ 
+
+        # ~
         if (features is not None):
             markers = list(annotation["shape"].unique())
             mg = mygene.MyGeneInfo()
-            # ~ for i in enumerate(features): 
+            # ~ for i in enumerate(features):
             gene_info = mg.querymany(features, scopes='symbol', fields='ensembl.transcript')[0]
             sum_trx = expression_table.loc[:,features]
-            
+
             # color by quantile
             trx_df = sum_trx.to_frame('trx_count')
-            # comb, traces = color_by_quantile(trx_df, comb, bin_col_dict)  
+            # comb, traces = color_by_quantile(trx_df, comb, bin_col_dict)
             comb, traces = color_by_value(trx_df, comb)
-            
+
     data = []
     for t in traces:
+        
         trace = dict(
             name=t,
             text = comb.loc[comb["name"]==t,:].index,# + " "+ transformed_expression["day"], #+ "\n" + transformed_expression["branch"],
@@ -642,21 +669,21 @@ def plot_3d_pca(transformed_expression, annotation, settings, expression_table=N
             )
         data.append(trace)
     if(clusters != None):
-        
+
         centroids = get_cluster_centroids(transformed_expression, clusters)
         trace = record_trace(clusters, comb, settings, centroids)
         data.append(trace)
-        
+
     # check if start/end centroids extend off the plot dimensions and reassign dimensions if so
     def nested_set(dic, keys, value):
       for key in keys[:-1]:
           dic = dic.setdefault(key, {})
       dic[keys[-1]] = value
-      
+
     #print(annotation["shape"].apply(shape_matplotlib2plotly))
     axis_tuples = list(zip(["x", "y", "z"],["xaxis", "yaxis", "zaxis"]))
     for i,c in axis_tuples:
-        # 
+        #
         if (trace[i].min() < layout['scene'][c]['range'][0]):
             nested_set(layout, ['scene', c, 'range'], [trace[i].min(),layout['scene'][c]['range'][1]])
         if (trace[i].max() > layout['scene'][c]['range'][1]):
@@ -664,7 +691,7 @@ def plot_3d_pca(transformed_expression, annotation, settings, expression_table=N
     # ~ fig = dict(data=data, layout=layout)
     if (features is not None):
         fig = go.Figure(data=data, layout=layout)
-             
+
         if not os.path.exists('output'):
           os.makedirs('output')
         url = plotly.offline.plot(fig, filename="output/"+settings.result_filename+"_"+features, validate=False, auto_open=False)
@@ -675,7 +702,7 @@ def plot_3d_pca(transformed_expression, annotation, settings, expression_table=N
           os.makedirs('output')
         url = plotly.offline.plot(fig, filename="output/"+settings.result_filename, validate=False, auto_open=False)
         # url = plotly.io.write_html(fig, file=settings.result_filename, validate=False, auto_open=False)
-    
+
     print(url)
     return(fig)
 
@@ -683,11 +710,11 @@ def plot_3d_pca(transformed_expression, annotation, settings, expression_table=N
 #  takes as input:
 #  - dictionary object
 #  - list of nested keys ['scene', 'xaxis', 'range']
-#  - new value to be set layout['scene']['xaxis']['range'][0],0]    
-def nested_set(dic, keys, value):                     
+#  - new value to be set layout['scene']['xaxis']['range'][0],0]
+def nested_set(dic, keys, value):
         for key in keys[:-1]:
             dic = dic.setdefault(key, {})
-        dic[keys[-1]] = value 
+        dic[keys[-1]] = value
 
 ## take linkage (from scipy.linkage) and generate n clusters
 #  takes as input:
@@ -717,26 +744,26 @@ def get_cluster_labels(linkage, n_clusters, labels):
 #  colors are the colors to assign
 def change_annotation_colors_to_clusters(clusters, annotation, colors):
   # breakpoint
-  # 
+  #
   for i,c in enumerate(clusters.values()):
       annotation.loc[annotation.index.isin(c), "color"] = colors[i]
   print(colors)
   print("here")
-  # 
+  #
   return(annotation)
 
 ## plot hierarchical clustering for all methods of linkage
 # arguments are:
-# - pd.DataFrame with PCA transformed gene expression 
+# - pd.DataFrame with PCA transformed gene expression
 # - annotation pd.DataFrame
 # - settings object
 # - filename for output picture
 def plot_all_hierarchical_clusterings(transformed_expression, annotation, color_scheme, settings, clusters=None):
-    
+
     link_color = {}
     def link_color_func(node):
         return link_color[node]
-    
+
     scipy_linkage_methods = ["complete", "average", "single", "centroid", "median", "ward"]
     # ~ scipy_linkage_methods = ["ward"]
     # plot clusterings on one magor figure
@@ -761,7 +788,7 @@ def plot_all_hierarchical_clusterings(transformed_expression, annotation, color_
 # - pd.DataFrame with PCA transformed gene expression
 # - method of linkages (ward, complete, average, etc.)
 def plot_hierarchical_clustering(transformed_expression, annotation, method, color_scheme="overwrite", sett=settings, clusters=None):
-    # color links on the basis of connection to same-group neighbor. 
+    # color links on the basis of connection to same-group neighbor.
 
     # If neighbors in same group, color identically. If neighbors in different groups, color gray.
     def colorize_links(linkage):
@@ -770,7 +797,7 @@ def plot_hierarchical_clustering(transformed_expression, annotation, method, col
         for i in range(0,n):
             l_color[i] = annotation.iloc[i,]["color"]
         #print l_color
-        
+
         # ~ test = sch.fcluster(linkage, sett.num_clusters, criterion='maxclust')
         # ~ cluster_col_dict = dict(zip(range(1,sett.num_clusters+1),["blue", "green", "red", "yellow"]))
         # ~ test2 = pd.DataFrame(test)
@@ -787,24 +814,24 @@ def plot_hierarchical_clustering(transformed_expression, annotation, method, col
                 l_color[n+i] = l_color[clust2]
         #print l_color
         return l_color
-    
+
     def link_color_func(node):
         return link_color[node]
-            
+
     linkage = sc.cluster.hierarchy.linkage(transformed_expression, method=method)
-    
+
     clusters_without_time = get_cluster_labels(linkage, sett.num_clusters, transformed_expression.index)
     cluster_colors = ["blue", "red", "orange", "purple", "green", "brown", "black", "gray", "lawngreen", "magenta", "lightpink", "indigo", "lightblue", "lightgoldenrod1", "mediumpurple2"]
 
     if color_scheme == "overwrite":
       annotation = change_annotation_colors_to_clusters(clusters_without_time, annotation, cluster_colors)
     clusters = []
-    
+
     for i in range(0,sett.num_clusters):
         time = i+1
         clusters.append( (time,annotation.loc[annotation["color"]==cluster_colors[i]].index) )
     clusters.sort(key=lambda by_first: by_first[0])
-    
+
     link_color = colorize_links(linkage)
     fig,ax = plt.subplots(figsize=(32,10))
     dendro  = sc.cluster.hierarchy.dendrogram(
@@ -827,7 +854,7 @@ def plot_hierarchical_clustering(transformed_expression, annotation, method, col
 ## rotate transformed expression matrix by defined angle
 #  used internally in order to define pseudotime
 #  arguments are:
-# - pd.DataFrame with PCA transformed gene expression 
+# - pd.DataFrame with PCA transformed gene expression
 # - x,y = PCs to rotate
 # - angle in degrees
 # returns:
@@ -840,19 +867,19 @@ def rotate_expression(transformed_expression,x,y,angle):
     return ret
 
 
-## function 
+## function
 # - finds pair of 2 PCs that are most correlated with time labels (as defined by "day" column in annotation table) using spearman correlation
 # - finds rotation of this PCs so X axis has best correlation with time
-# 
+#
 # returns: pseudotime for each cell, defined as linear combination of PCs, having best time correlation
-# 
+#
 # arguments are:
-# - pd.DataFrame with PCA transformed gene expression 
+# - pd.DataFrame with PCA transformed gene expression
 # - annotation pd.DataFrame
 # - pca sklearn.decomposition object
 # - settings object
 def find_pseudotime(transformed_expression, annotation, pca, settings, user_pcs=None):
-    #~ 
+    #~
     n_pca = len(transformed_expression.columns)
     transformed_expression["day"] = annotation["day"]
     transformed_expression_without_superimposed = transformed_expression.loc[annotation[annotation["superimpose-for-spearman"]==False].index]
@@ -885,7 +912,7 @@ def find_pseudotime(transformed_expression, annotation, pca, settings, user_pcs=
         t_val = []
         for i in transformed_expression.iloc[:, :-1]:
             test = (abs(vals_shCtrl.loc[:,i].mean()-vals_shRBKD.loc[:,i].mean()))/np.std(vals_shCtrl.loc[:,i].append(vals_shRBKD.loc[:,i]))
-            t_val.append(test) 
+            t_val.append(test)
 
         #~ # define axis 3
         ax3= ax.twinx()
@@ -899,7 +926,7 @@ def find_pseudotime(transformed_expression, annotation, pca, settings, user_pcs=
     low,high = plt.xlim()
     plt.xlim(low-0.5, high+0.5)
     plt.savefig(spearman_filename, dpi=200)
-    #~ 
+    #~
     if user_pcs:
         settings.pcs = user_pcs
     else:
@@ -931,18 +958,18 @@ def find_pseudotime(transformed_expression, annotation, pca, settings, user_pcs=
     pt = (pt-pt.min())/(pt.max()-pt.min())
     print("printing correlation plot to "+spearman_filename+".png")
     return pt
- 
-## function 
+
+## function
 # - finds pair of 2 PCs that are most correlated with time labels (as defined by "day" column in annotation table) using spearman correlation
 # - finds rotation of this PCs so X axis has best correlation with time
-# 
+#
 # returns: pseudotime for each cell, defined as linear combination of PCs, having best time correlation
-# 
+#
 # arguments are:
-# - pd.DataFrame with PCA transformed gene expression 
+# - pd.DataFrame with PCA transformed gene expression
 # - annotation pd.DataFrame
 # - pca sklearn.decomposition object
-# - settings object  
+# - settings object
 def find_pseudotime_plotnine(transformed_expression, annotation, pca, settings, user_pcs=None):
     n_pca = len(transformed_expression.columns)
     transformed_expression["day"] = annotation["day"]
@@ -952,7 +979,7 @@ def find_pseudotime_plotnine(transformed_expression, annotation, pca, settings, 
     #plot_spearman correlations and explained variation
     spearman_filename = settings.result_filename.replace(".png", "_spearman.png")
     width=0.2
-    
+
     # plot difference between shRBKD and shCtrl cells if both present
     # calculate distance between RBKD and Ctrl cells
     shCtrl_cells = annotation.loc[annotation['treatment'].str.contains("shCtrl")].index
@@ -965,8 +992,8 @@ def find_pseudotime_plotnine(transformed_expression, annotation, pca, settings, 
       t_val = []
       for i in transformed_expression.iloc[:, :-1]:
           test = (abs(vals_shCtrl.loc[:,i].mean()-vals_shRBKD.loc[:,i].mean()))/np.std(vals_shCtrl.loc[:,i].append(vals_shRBKD.loc[:,i]))
-          t_val.append(test) 
-  
+          t_val.append(test)
+
     #   distance (green) ------------------------------
       mydistance = {
         'distance' : t_val,
@@ -979,7 +1006,7 @@ def find_pseudotime_plotnine(transformed_expression, annotation, pca, settings, 
       + scale_x_continuous(breaks=range(0, 21))
       + theme_minimal())
       greenplot.save('distance.pdf', height=6, width=8)
-    
+
     #   corr to days (blue) ------------------------------
     spearman_df = transformed_expression_without_superimposed.corr(method="spearman").loc["day",range(1,n_pca+1)].abs().sort_values(ascending=False)
     spearman_df = spearman_df.to_frame()
@@ -990,28 +1017,28 @@ def find_pseudotime_plotnine(transformed_expression, annotation, pca, settings, 
     + labs(x = "PC component", y = "", title = "spearman correlation to days")
     + scale_x_continuous(breaks=range(0, 21))
     + theme_minimal())
-    
+
     blueplot.save('correlation.pdf', height=6, width=8)
-    
+
     #   % var exp (red) ------------------------------
     var_explained = {
       'var_expl' : pca.explained_variance_ratio_,
-      'pc' : range(1,n_pca+1) 
+      'pc' : range(1,n_pca+1)
     }
     var_explained = pd.DataFrame(var_explained)
-    
+
     redplot = (ggplot(var_explained, aes('pc', 'var_expl'))
     + geom_col(fill = "red")
     + labs(x = "PC component", y = "", title = "% variance explained")
     + scale_x_continuous(breaks=range(0, 21))
     + theme_minimal())
     redplot.save('var_expl.pdf', height=6, width=8)
-    
+
     if user_pcs:
         settings.pcs = user_pcs
     else:
         settings.pcs = spearman.iloc[0:2].index
-    
+
     # find best rotation
     best_angle = 0
     best_spearman = 0
@@ -1022,11 +1049,11 @@ def find_pseudotime_plotnine(transformed_expression, annotation, pca, settings, 
         if(spearman > best_spearman):
             best_angle = a
             best_spearman = spearman
-        
+
     del(transformed_expression["day"])
     print (settings.pcs)
     print ("Best rotation: ",best_angle)
-    
+
     rotated_expression = rotate_expression(transformed_expression, int(settings.pcs[0]), int(settings.pcs[1]), best_angle)
     # plot original PC plot
     plot_2d_pca_single_plot(transformed_expression, annotation, pca, settings, filename = settings.result_filename+"-original")
@@ -1037,7 +1064,7 @@ def find_pseudotime_plotnine(transformed_expression, annotation, pca, settings, 
     # normalize to <0;1>
     pt = (pt-pt.min())/(pt.max()-pt.min())
     print("printing correlation plot to "+spearman_filename+".png")
-    return pt    
+    return pt
 
 ## function reads list of integers and/or ranges
 #  and converts it to list of integers
@@ -1059,7 +1086,7 @@ def list_from_ranges(s):
 #  weight for each cluster is an inverse square distance of the cell to the cluster
 #  w = 1/(dist^2)
 def calculate_pseudotime_using_cluster_times(PC_expression, annotation, clusters, settings):
-    
+
     palette_size = int(input("What palette size would you like to use (how many colors)? "))
     calculate_on = list_from_ranges(input("Which PCs would you like to use for calculating pseudotime? [type comma separated list, list can also include ranges 1-5,8] "))
     used_PC_expression = PC_expression[calculate_on]
@@ -1072,16 +1099,16 @@ def calculate_pseudotime_using_cluster_times(PC_expression, annotation, clusters
         sq_distances[i] = ((used_PC_expression-centroids[c])**2).sum(axis=1)**0.5
         weights[i] = 1/sq_distances[i]
         test += sq_distances[i]
-    
+
     pseudotime_clusters = [(clusters[0][0]-1,clusters[0][1])]
     pseudotime_clusters.extend(clusters)
     pseudotime_clusters.append(tuple((clusters[-1][0]+1, clusters[-1][1])))
-    
+
     # fine tune weighting
     #~ c_weights, c_clusts =  map(list, zip(*pseudotime_clusters))
     #~ new_weights = [x for x in c_weights]
     #~ pseudotime_clusters = zip(new_weights, c_clusts)
-    
+
     # exclude first and last "real centroids"
     #~ cols = [1,-2]
     #~ weights.drop(weights.columns[cols], axis=1, inplace = True)
@@ -1105,7 +1132,7 @@ def calculate_pseudotime_using_cluster_times(PC_expression, annotation, clusters
 
 ## fits polynomial curve on gene expression data, and returns value of this curve in equal intervals over pseudotime
 # arguments:
-# - pd.DataFrame with gene expression 
+# - pd.DataFrame with gene expression
 # - pd.Series with pseudotime coordinates for each cell
 # - Ensamble transcript ID
 # - degree of the polynomial to fit
@@ -1121,14 +1148,14 @@ def interpolate_gene_over_pseudotime(exp, pseudotime, transcript_id, weights=Non
 
 ## plots gene expression over pseudotime
 # arguments are:
-# - pd.DataFrame with gene expression 
+# - pd.DataFrame with gene expression
 # - pd.Series with pseudotime coordinates for each cell
 # - Ensamble transcript ID
 def plot_gene_with_pseudotime(exp, pt, pt_ids, gene_tuple, annotation, filename=None, ax=None, plot_id=None):
-    # 
-    
+    #
+
     mypt = copy.deepcopy(pt)
-    
+
      # find expression and pseudotime for:
     # 1) exp cells in exp pt
     # 2) ctrl cells in ctrl pt
@@ -1136,30 +1163,30 @@ def plot_gene_with_pseudotime(exp, pt, pt_ids, gene_tuple, annotation, filename=
       # mypt[k] = v.to_frame()
       mypt[k] = annotation.join(mypt[k])
       mypt[k]['expression'] = exp.loc[exp.index.isin(mypt[k].index), gene_tuple[0]]
-    
+
     df = pd.concat(mypt , axis=0, keys = mypt.keys())
-    
+
     df.reset_index(inplace=True)
-    
+
     df = df.rename(columns={"level_0":"pt_choice", "level_1":"sample_id"})
-    
+
     df = df.dropna()
-    
+
     rho_values = [''.join(["Rho: ", str(i)]) for i in gene_tuple[1:]]
-    
+
     rho_labels = []
     rho_labels.extend(pt_ids['pt'])
     if 'cpt' in pt_ids.keys():
       rho_labels.extend(pt_ids['cpt'])
-      
+
     for i,v in enumerate(rho_labels):
       rho_values[i] = ' '.join([rho_labels[i], rho_values[i]])
-      
+
     rho_values.insert(0, gene_tuple[0])
-    
-    
+
+
     plot_title = ' '.join(rho_values)
-    
+
     # plot_title = ''.join([gene_tuple[0], "; pseudotime Rho: ", str(gene_tuple[1]), "; Control Rho: ", str(gene_tuple[2])])
 
     gene_plot = (
@@ -1169,36 +1196,36 @@ def plot_gene_with_pseudotime(exp, pt, pt_ids, gene_tuple, annotation, filename=
       + labs(y='log2 expression', x='pseudotime', title=plot_title)
       + facet_wrap("pt_choice")
     )
-    
+
     return gene_plot
-    
+
 ## read pseudotime from tab delimited csv file
 def read_pseudotime_from_file(filename):
-  
+
   return pd.read_csv(filename, sep="\t", index_col=0, names=["pseudotime"], engine='python')["pseudotime"]
 
 ## look up gene, transcript dict from mygene
 def get_gene_transcript_dic(expression_table):
-  
-  
+
+
   transcripts = expression_table.columns.copy()
-          
+
   mg = mygene.MyGeneInfo()
-  
+
   gene_info = mg.querymany(transcripts, scopes='ensembl.transcript', fields='symbol', returnall=False)
-  
+
   # remove transcripts not found in gene lookup
   gene_info[:] = [d for d in gene_info if d.get('notfound') != True]
-  
+
   # define contiguous list of transcripts
   transcripts = [query for i, query in enumerate(d['query'] for d in gene_info)]
   # define contiguous list of genes (matching transcripts)
   genes = [symbol for i, symbol in enumerate(d['symbol'] for d in gene_info)]
-  
+
   dic={}
   for x,y in zip(transcripts, genes):
-      dic.setdefault(y,[]).append(x)    
-  
+      dic.setdefault(y,[]).append(x)
+
   return(dic)
 
 ## look up gene, transcript dict from mygene
@@ -1213,7 +1240,7 @@ def trx_to_gene_exp_table(expression_table, gene_trx_dic):
         gene_col.columns = [gene]
         #generate gene-level exprescsion table
         gene_exp.append(gene_col)
-    
+
     gene_exp = pd.concat(gene_exp, axis = 1)
     gene_exp.columns = gene_trx_dic.keys()
 
@@ -1221,15 +1248,15 @@ def trx_to_gene_exp_table(expression_table, gene_trx_dic):
 
 # @functools.lru_cache(maxsize=128)
 def return_subset_correlation(pseudotime, myexp, subset_index, gene_trx_dic, feature, method):
-  # 
+  #
   subset_index = pseudotime.index[pseudotime.index.isin(subset_index)]
   transcripts = myexp.columns.copy()
-  
-  # 
+
+  #
   subsetc = myexp.reindex(subset_index)
   subsetc["pseudotime"] = pseudotime.reindex(subset_index)
   if feature == "g":
-    # 
+    #
     spearman = pd.DataFrame(0, index=gene_trx_dic.keys(), columns=["corr"])
     # correlation by gene
     for i,gene in enumerate(gene_trx_dic):
@@ -1246,7 +1273,7 @@ def return_subset_correlation(pseudotime, myexp, subset_index, gene_trx_dic, fea
         corr = 0 # then correlation is zero
       spearman.loc[gene,"corr"] = corr
   elif feature == "t":
-    # 
+    #
     spearman = pd.DataFrame(0, index=transcripts, columns=["corr"])
     # correlation by transcript
     for i,transcript in enumerate(transcripts):
@@ -1256,17 +1283,17 @@ def return_subset_correlation(pseudotime, myexp, subset_index, gene_trx_dic, fea
       if corr != corr: # if NaN (no data to calculate on)
         corr = 0 # then correlation is zero
       spearman.loc[transcript,"corr"] = corr
-  # 
+  #
   return(spearman)
 
 ## returns spearman correlation of each gene in expression matrix with pseudotime
 # arguments are:
-# - exp = pd.DataFrame with gene expression 
+# - exp = pd.DataFrame with gene expression
 # - pseudotime = pd.Series with pseudotime coordinates for each cell
 # - [optional] correlation_threshold = returns only genes with absolute value of correlation >= threshold
 def get_correlation_with_pseudotime(pseudotime, exp, annotation, gene_trx_dic, cell_set_flag=None, feature = "g", correlation_threshold = 0, method = "spearman"):
-    
-    
+
+
     if cell_set_flag == "ctrl":
         spearman = return_subset_correlation(pseudotime, exp, pseudotime.index, gene_trx_dic, feature, method)
 
@@ -1296,14 +1323,14 @@ def get_correlation_with_pseudotime(pseudotime, exp, annotation, gene_trx_dic, c
             spearman.columns = cell_set_flags
 
     return spearman
-    
+
 
 def plot_3d_pca_colored_by_clustering(PC_expression, annotation, settings):
-    
+
     link_color = {}
     def link_color_func(node):
         return link_color[node]
-    
+
     def colorize_links(linkage):
         l_color = {}
         n = PC_expression.shape[0]
@@ -1320,7 +1347,7 @@ def plot_3d_pca_colored_by_clustering(PC_expression, annotation, settings):
                 l_color[n+i] = "gray"
         #print l_color
         return l_color
-    
+
     palette = ["red","blue","green","orange","purple","pink","#f47442"]
     linkage = sc.cluster.hierarchy.linkage(PC_expression[settings.pcs], method=settings.clustering_method)
     clusters = get_cluster_labels(linkage, settings.n_clusters, PC_expression.index)
@@ -1331,9 +1358,9 @@ def plot_3d_pca_colored_by_clustering(PC_expression, annotation, settings):
             f.write("\t".join(clusters[c]))
             f.write("\n")
             annotation.loc[clusters[c],"color"] = palette[i]
-    
+
     link_color = colorize_links(linkage)
-    
+
     plot_3d_pca(PC_expression, annotation, settings)
     dendro  = sc.cluster.hierarchy.dendrogram(linkage,labels = PC_expression.index,count_sort = "ascending", link_color_func = link_color_func)
     plt.show()
@@ -1351,10 +1378,10 @@ def time_clusters_from_annotations(annotation):
 #  and returns centroid for each cluster
 def get_cluster_centroids(PC_expression, clusters):
     centroids = []
-    
+
     for cl in clusters:
         centroids.append(PC_expression.loc[cl[1],:].mean())
-    # append "first cell" and "last cell" to centroids to 
+    # append "first cell" and "last cell" to centroids to
     # based on extrapolation of trace from centroids 0 to 1 and n-1 to n respectively
     half_trace_seg_1 = (centroids[0] - centroids[1])/2
     half_trace_seg_n = (centroids[-1] - centroids[-2])/2
@@ -1372,38 +1399,38 @@ def plot_heatmap(expression_table, annotation, cell_dendro):
     data_array = data.view((np.float, len(data.dtype.names)))
     data_array = data_array.transpose()
     labels = data.dtype.names
-    
+
     expression_table = expression_table.loc[cell_dendro["ivl"]]
     data_array0 = expression_table.as_matrix()
     data_array0 = data_array0.transpose()
     labels0 = expression_table.index
-    
-    
+
+
     #~ # Initialize figure by creating side dendrogram
     #~ figure = FF.create_dendrogram(data_array0, orientation='right')
     #~ for i in range(len(figure['data'])):
         #~ figure['data'][i]['xaxis'] = 'x2'
-    
+
     # Create Upper Dendrogram
     figure = FF.create_dendrogram(data_array, orientation='top', labels=labels)
     for i in range(len(figure['data'])):
         figure['data'][i]['yaxis'] = 'y2'
-    
+
     #~ dendro_top = FF.create_dendrogram(data_array, orientation='top', labels=labels)
-    #~ for i in range(len(dendro_top['data'])):      
+    #~ for i in range(len(dendro_top['data'])):
         #~ dendro_top['data'][i]['yaxis'] = 'y2'
-    
+
     # Add Top Dendrogram Data to Figure
     #~ figure['data'].extend(dendro_top['data'])
 
     #convert scipy dend to plotly
-    
+
     cell_dendro_k, cell_dendro_v = cell_dendro.keys(), cell_dendro.values()
-    
+
     cell_ids = cell_dendro_v[0]
-    
+
     ptl_dend = dict(zip(cell_ids, zip(cell_dendro_v[1], cell_dendro_v[2], cell_dendro_v[3], cell_dendro_v[4])))
-    
+
     new_dend = {}
     for key,value in ptl_dend.iteritems():
         layout = dict(
@@ -1418,33 +1445,33 @@ def plot_heatmap(expression_table, annotation, cell_dendro):
             yaxis = 'y')
         new_dend[key] = layout
 
-    def without_keys(d, keys):       
+    def without_keys(d, keys):
         return {x: d[x] for x in d if x not in keys}
-        
+
     new_top = without_keys(figure, "data")
-    
+
     new_top["layout"]["xaxis"]["ticktext"] = ptl_dend.keys()
 
     new_tickvals = [5.0 + 10*idx for idx,val in enumerate(ptl_dend.keys())]
-    
+
     new_top["layout"]["xaxis"]["tickvals"] = new_tickvals
 
     new_top["data"] = new_dend
 
     # Add Side Dendrogram Data to Figure
     #~ figure['data'].extend(new_top)
-    
+
     # Create Heatmap
     dendro_leaves = new_top['layout']['xaxis']['ticktext']
     dendro_leaves = [i for i,v in enumerate(dendro_leaves)]
 
     heat_data = pdist(data_array0)
     heat_data = squareform(data_dist)
-    
+
     #~ heat_data = heat_data[dendro_leaves,:]
     #~ heat_data = heat_data[:,dendro_leaves]
 
-    # 
+    #
 
     heatmap = Data([
         Heatmap(
@@ -1454,9 +1481,9 @@ def plot_heatmap(expression_table, annotation, cell_dendro):
             colorscale = 'YIGnBu'
         )
     ])
-    
-    # 
-    
+
+    #
+
     heatmap[0]['x'] = figure['layout']['xaxis']['tickvals']
     #~ heatmap[0]['y'] = dendro_side['layout']['yaxis']['tickvals']
 
@@ -1592,7 +1619,7 @@ def read_in_diffex(cluster_dir):
             for f in filenames:
                 yield os.path.abspath(os.path.join(dirpath, f))
 
-    csv_files = [x for x in absoluteFilePaths(cluster_dir) if x.endswith("_expression_values.csv")] 
+    csv_files = [x for x in absoluteFilePaths(cluster_dir) if x.endswith("_expression_values.csv")]
 
     csvs = [pd.read_csv(x, delim_whitespace=True) for x in csv_files]
 
@@ -1610,7 +1637,7 @@ def read_in_diffex(cluster_dir):
     diffex_csvs = dict(zip(csv_names, csvs0))
 
     #~ for key,value in diffex_csvs.iteritems():
-        #~ value.to_csv(key) 
+        #~ value.to_csv(key)
     return diffex_csvs
 
 def assign_clusters_using_hierarch(subset_annotation, subset_PC_expression, sett, colnm=None, colval=None):
@@ -1629,11 +1656,11 @@ def assign_clusters_using_hierarch(subset_annotation, subset_PC_expression, sett
         cluster_colors = ["blue", "red", "orange", "purple", "green", "brown", "black", "gray", "lawngreen", "magenta", "lightpink", "indigo", "lightblue", "lightgoldenrod1", "mediumpurple2"]
         print("Now plotting clusters")
         # breakpoint
-        # 
+        #
         subset_annotation = change_annotation_colors_to_clusters(clusters_without_time, subset_annotation, cluster_colors)
         clusters = []
         sett.pcs = cluster_on_pcs[:3]
-        # 
+        #
         plot_3d_pca(subset_PC_expression, subset_annotation, sett)
         for i in range(0,number_of_clusters):
             time = float(input("Assign time for cluster shown in "+cluster_colors[i]+": "))
@@ -1645,28 +1672,28 @@ def assign_clusters_using_hierarch(subset_annotation, subset_PC_expression, sett
         clusters_without_time = get_cluster_labels(linkage, number_of_clusters, PC_expression.index)
         cluster_colors = ["blue", "red", "orange", "purple", "green", "brown", "black", "gray", "lawngreen", "magenta", "lightpink", "indigo", "lightblue", "lightgoldenrod1", "mediumpurple2"]
         print("Now plotting clusters")
-        # # 
+        # #
         subset_annotation = change_annotation_colors_to_clusters(clusters_without_time, annotation, cluster_colors)
         clusters = []
         sett.pcs = cluster_on_pcs[:3]
-        # 
+        #
         plot_3d_pca(PC_expression, subset_annotation, sett)
         for i in range(0,number_of_clusters):
             time = float(input("Assign time for cluster shown in "+cluster_colors[i]+": "))
             clusters.append( (time,subset_annotation.loc[subset_annotation["color"]==cluster_colors[i]].index) )
         clusters.sort(key=lambda by_first: by_first[0])
-        # 
+        #
         dendro = plot_hierarchical_clustering(PC_expression[cluster_on_pcs], subset_annotation, method=method, sett=sett)
-        
+
         cluster_dict = {}
         for a,b in subset_clusters:
           for c in b:
             new_dict[c] = a
         subset_annotation["name"] = pd.Series(cluster_dict)
-        
+
     # sett.subset = 'cluster'
     return clusters, dendro, subset_annotation
-    
+
 def assign_clusters_using_file(cluster_file):
     sett.append("cluster", cluster_file)
     sett.n_clusters = len(sett.sets['cluster'])
@@ -1705,9 +1732,9 @@ def print_clusters(clusters):
         #~ enum_df = pd.DataFrame(clusters[i][1])
         #~ enum_df.columns = [str(a)]
         #~ clusters_df = pd.concat([clusters_df, enum_df], axis=1)
-        
+
 def print_dendro(dendros, method):
-    oldd = dict(zip(dendros[method]['ivl'], dendros[method]['color_list']))  
+    oldd = dict(zip(dendros[method]['ivl'], dendros[method]['color_list']))
 
     newd = {}
     for i,d in oldd.items():
@@ -1740,10 +1767,10 @@ def subset_pc_by_param(pc_expression, colnm, colval, annotation):
             subset_annotation = subset_annotation.append(excluded_day0)
         subset_PC_expression = pc_expression.loc[subset_annotation.index.values]
         return subset_annotation, subset_PC_expression
-        
+
 def subset_pc_by_clusters(pc_expression, clusters):
     cluster_cells = set.union(*clusters.values())
-    subset_annotation = annotation[annotation.index.isin(cluster_cells)]   
+    subset_annotation = annotation[annotation.index.isin(cluster_cells)]
     # add day0 cells to all subset_annotations if not removed in plot_settings
     day0_annotation = annotation[annotation["day"]==0.0]
     excluded_day0 = day0_annotation[-day0_annotation.isin(subset_annotation)].dropna()
@@ -1753,13 +1780,13 @@ def subset_pc_by_clusters(pc_expression, clusters):
     return subset_annotation, subset_PC_expression
 
 def find_discrim_pcs(subset_pc_expression, annotation):
-    
+
     shRBKD_cells = annotation.loc[annotation['treatment'] != "shCtrl"].index
     vals_shRBKD = PC_expression.loc[shRBKD_cells,:]
-    
+
     shCtrl_cells = annotation.loc[annotation['treatment'] == "shCtrl"].index
     vals_shCtrl = PC_expression.loc[shCtrl_cells,:]
-    
+
     for i in range(1, 20):
         test = (abs(vals_shCtrl.loc[:,i].mean()-vals_shRBKD.loc[:,i].mean()))/np.std(vals_shCtrl.loc[:,i].append(vals_shRBKD.loc[:,i]))
         print(test)
@@ -1769,7 +1796,7 @@ def normalize_centroids(subset_pc_expression):
     ctrl_colnm, ctrl_colval = retrieve_subset_param()
     pcs = map(int,input("Which PCs would you like on the plot? (type comma separated list, such as 1,3,4) ").split(","))
     sett.pcs = pcs
-    
+
     ctrl_annotation, ctrl_pc_expression = subset_pc_by_param(PC_expression, colnm, colval)
     ctrl_clusters = time_clusters_from_annotations(ctrl_annotation)
     ctrl_cntrds = get_cluster_centroids(ctrl_pc_expression, ctrl_clusters)
@@ -1800,14 +1827,14 @@ def get_isoforms_correlated_with_pc(pc, n):
     # ~ df = pd.DataFrame(pca.components_[pc], pc, index=expression_table.columns)
     df = df.reindex(df.abs().sort_values(inplace=False, ascending=False).index).iloc[0:n]
     return df
-    
+
 def get_isoforms_correlated_pc_set(pca, expression_table, pcs, n, filename):
     data = [get_isoforms_correlated_with_pc(i, n) for i in pcs]
     data = pd.concat(data)
     csv_filename = filename+"_pcs_"+"_".join(map(str, pcs))+".csv"
     data.to_csv(csv_filename, sep=",")
     return data
-    
+
 def save_obj(output_dir, obj, name):
     with open(output_dir+'/'+ name + '.pkl', 'wb') as f:
         pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
@@ -1815,9 +1842,9 @@ def save_obj(output_dir, obj, name):
 def load_obj(output_dir, name ):
     with open(output_dir+ name + '.pkl', 'rb') as f:
         return pickle.load(f)
-  
+
 def rename_shl(mylist):
-  
+
   if (re.match('X', mylist[0])):
     mylist = [i.replace("X", "") for i in mylist]
     max_nchar = len(max(mylist, key = len))
@@ -1826,16 +1853,16 @@ def rename_shl(mylist):
   return mylist
 
 def plot_velocity(expression_table, annotation, PC_expression, adata_loom, xlabel='1', ylabel='2', color_key='color'):
-    
+
     PC_expression.index = rename_shl(PC_expression.index)
-    
+
     expression_table.index = rename_shl(expression_table.index)
     annotation.index = rename_shl(annotation.index)
     expression_table = expression_table[expression_table.index.isin(annotation.index)]
     adata = anndata.AnnData(expression_table, annotation)
 
     retained_cells = list(set(adata_loom.obs.index).intersection(set(adata.obs.index)))
-    
+
     adata_loom = adata_loom[retained_cells,:]
     adata_loom.obs = adata_loom.obs.join(adata.obs)
 
@@ -1854,7 +1881,7 @@ def plot_velocity(expression_table, annotation, PC_expression, adata_loom, xlabe
 
     scv.tl.velocity(adata_loom)
     scv.tl.velocity_graph(adata_loom)
-    
+
     components=xlabel+','+ylabel
     xlabel = 'PC '+ xlabel
     ylabel = 'PC '+ylabel
@@ -1889,19 +1916,19 @@ def plot_using_plotly(transformed_expression):
                   backgroundcolor='#bababa'
               ),
               #aspectratio = dict( x=1, y=1, z=0.7 ),
-              aspectmode = 'manual'        
+              aspectmode = 'manual'
               ),
           )
           data = []
           traces = comb["name"].unique()
           for t in traces:
-            
+
               trace = dict(
                   text = transformed_expression.index, #+ "\n" + transformed_expression["branch"],
                   x = transformed_expression["x"],
                   y = transformed_expression["y"],
                   z = transformed_expression["z"],
-                  type = "scatter3d",    
+                  type = "scatter3d",
                   mode = 'markers',
                   opacity = 0.80,
                   marker = dict(
@@ -1911,13 +1938,13 @@ def plot_using_plotly(transformed_expression):
                   symbol=comb.loc[comb["name"]==t,"shape"].apply(shape_matplotlib2plotly).values,
                   line=dict(width=1) )
               )
-              
+
               data.append(trace)
           fig = dict(data=data, layout=layout)
           url = plotly.offline.plot(fig, filename='resources/single_cell-3d-tSNE', validate=False, auto_open=False)
-          
+
           plot_using_plotly(tsne_transformed_expression_3d)
-      
+
 
 # if __name__ == "__main__":
 #     main()

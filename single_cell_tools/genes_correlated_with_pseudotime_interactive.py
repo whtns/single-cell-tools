@@ -337,7 +337,7 @@ while True:
       out_filename = output_dir+correlation_method+"_"+ptime+"_top_"+str(top_n)+"_genes.pdf"
       plot_genes_of_interest(genes_of_interest, out_filename, expression_table, annotation, ptime, pt, cpt)
   elif(action == "I"):
-    IPython.embed()
+    # IPython.embed()
 
 #~ if __name__ == "__main__":
 	#~ main()

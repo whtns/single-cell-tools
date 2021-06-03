@@ -107,7 +107,7 @@ def main():
 	#~ py.iplot(figure, )
 	
 def plot_tree( P, sel_color=None ):
-    ipdb.set_trace()
+    # ipdb.set_trace()
     icoord = sc.array( P['icoord'] )
     dcoord = sc.array( P['dcoord'] )
     color_list = sc.array( P['color_list'] )

@@ -22,9 +22,9 @@ from sc_pseudotime import *
 
 # ../script_shortcut.pkl
 parser = argparse.ArgumentParser(description="runs pseudotime_interactive")
-parser.add_argument("-e", "--expression-matrix", dest="expr_mat", default="resources/2020-02-11-SHL/remade_census_matrix.csv", help="gene by cell matrix of expression values", metavar="EXPR")
-parser.add_argument("-c", "--cell-sets", dest="cell_sets", default="resources/2020-02-11-SHL/New_cells_sets_3_6.csv", help="cell sets", metavar="CELL_SETS")
-parser.add_argument("-p", "--plot-settings", dest="plot_settings", default="resources/2020-02-11-SHL/New_plot_settings_2d.csv", help="plot settings", metavar="PLOT_SETTINGS")
+parser.add_argument("-e", "--expression-matrix", dest="expr_mat", default="../resources/2020-02-11-SHL/sunhye_census_matrix.csv", help="gene by cell matrix of expression values", metavar="EXPR")
+parser.add_argument("-c", "--cell-sets", dest="cell_sets", default="../resources/2020-02-11-SHL/New_cells_sets_3_6.csv", help="cell sets", metavar="CELL_SETS")
+parser.add_argument("-p", "--plot-settings", dest="plot_settings", default="../resources/2020-02-11-SHL/New_plot_settings_2d.csv", help="plot settings", metavar="PLOT_SETTINGS")
 parser.add_argument("-n", "--session-name", dest="session_name", help="a name to give to this analysis session for reproducbility", metavar="SESSION_NAME", required=False)
 parser.add_argument("-s", "--shortcut", dest = "shortcut", help="pickle file from which to load command line arguments", required = False) # default = "script_shortcut.pkl"
 parser.add_argument("-l", "--loom_path", dest = "loom_path", help="path to corresponding loom file", required = False) # default = "script_shortcut.pkl" # default="20170407-SHL-FACS-Hs_proj.loom"
@@ -180,7 +180,7 @@ while True:
     
     elif(action == "N"):
       test = normalize_centroids(subset_pc_expression)
-      url = plotly.offline.plot(test, filename="resources/normalize_centroids.html", validate=False, auto_open=False)
+      url = plotly.offline.plot(test, filename="../resources/normalize_centroids.html", validate=False, auto_open=False)
       print(url)
         
     elif(action == "S"):
@@ -304,7 +304,6 @@ while True:
       pickle.dump(settings_dict, f)
       print("settings saved to " + pickle_file)
       f.close()     
-        
+      
     elif(action == "I"):
       IPython.embed()
-

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "single_cell_tools"
-version = "0.1.0"
+version = "0.1.2"
 description = "A package for pseudotime and dimension reduction by cluster centroids"
 authors = ["Kevin Stachelek"]
 license = "MIT"
