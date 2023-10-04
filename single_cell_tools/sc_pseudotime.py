@@ -79,7 +79,7 @@ class settings:
     def read_cell_sets(self,cellset_file):
         
         cell_sets = {}
-        with open(cellset_file, 'rU') as f:
+        with open(cellset_file) as f:
             for line in f:
                 x = line.rstrip().split("\t")
                 cell_sets[x[0]] = x[1:]
@@ -268,7 +268,7 @@ def read_expression(expression_file, settings, min_expression = 0.1, min_cells =
 
     for s in accepted_sets_with_parameter: # iterating over dictionary operation->set
         for i in settings.sets[s]: # iterating over set
-            subset = set(settings.cell_sets[i[0]]).intersection(annotation.index)
+            subset = list(set(settings.cell_sets[i[0]]).intersection(annotation.index))
             annotation.loc[subset,s] = i[1]
 
     annotation["size"] = pd.to_numeric(annotation["size"])
@@ -280,13 +280,13 @@ def read_expression(expression_file, settings, min_expression = 0.1, min_cells =
     treatment_labels = [t for t in settings.cell_sets if t.startswith(treatment_group_prefix)]
     cluster_labels = [c for c in settings.cell_sets if c.startswith(cluster_group_prefix)]
     for i in day_labels:
-        subset = set(settings.cell_sets[i]).intersection(annotation.index)
+        subset = list(set(settings.cell_sets[i]).intersection(annotation.index))
         annotation.loc[subset,"day"]=int(i.split("_")[1])
     for i in treatment_labels:
-        subset = set(settings.cell_sets[i]).intersection(annotation.index)
+        subset = list(set(settings.cell_sets[i]).intersection(annotation.index))
         annotation.loc[subset,"treatment"]=i
     for i in cluster_labels:
-        subset = set(settings.cell_sets[i]).intersection(annotation.index)
+        subset = list(set(settings.cell_sets[i]).intersection(annotation.index))
         annotation.loc[subset,"cluster"]=i.split("_")[1]
 
     # crop annotation dataframe to only rows, that are in expression table
@@ -321,7 +321,7 @@ def run_PCA(expression_table, annotation, n_components):
 
     pca = decomposition.PCA(n_components=n_components, svd_solver="full")
     expression_table_for_PCA = expression_table.loc[annotation[annotation["superimpose"]==False].index]
-    #~
+
     print ("Calculating PCA on table of shape:",expression_table_for_PCA.shape)
     pca.fit(expression_table_for_PCA)
     print ("Explained variance: ", pca.explained_variance_)
@@ -444,16 +444,16 @@ def plot_2d_pca_single_plot(transformed_expression, annotation, pca, settings, f
 # - comb
 # - settings object
 def record_trace(clusters, comb, settings, centroids=None):
-
     test_centroids = centroids #testthis
 
-    used_centroids = test_centroids.transpose().iloc[:,[i - 1 for i in settings.pcs]]
+    # used_centroids = test_centroids.transpose().iloc[:,[i - 1 for i in settings.pcs]]
+    used_centroids = test_centroids.transpose()
     used_centroids.columns = ["x","y","z"]
     used_centroids["color"] = "black"
     used_centroids["shape"] = "shape"
-    colors = []
-    for i,c in enumerate(clusters):
-        colors += [comb.loc[c[1][0],"color"]]
+    # colors = []
+    # for i,c in enumerate(clusters):
+    #     colors += [comb.loc[c[1][0],"color"]]
 
     trace = dict(
         name = "centroids",
@@ -563,7 +563,7 @@ def plot_3d_pca(transformed_expression, annotation, settings, expression_table=N
         #title='Test',
         scene=dict(
             xaxis=dict(
-                # ~ range = [-settings.plot_dim[0], settings.plot_dim[0]],
+                # range = [-settings.plot_dim[0], settings.plot_dim[0]],
                 range = [used_pcs.iloc[:,0].min()-1, used_pcs.iloc[:,0].min()+max_range+1],
                 title="PC "+str(settings.pcs[0]),
                 gridcolor='rgb(0, 0, 0)',
@@ -572,8 +572,8 @@ def plot_3d_pca(transformed_expression, annotation, settings, expression_table=N
                 backgroundcolor='#bababa'
             ),
             yaxis=dict(
-                range = [-settings.plot_dim[1], settings.plot_dim[1]],
-                # ~ range = [used_pcs.iloc[:,1].min()-1, used_pcs.iloc[:,1].min()+max_range+1],
+                # range = [-settings.plot_dim[1], settings.plot_dim[1]],
+                range = [used_pcs.iloc[:,1].min()-1, used_pcs.iloc[:,1].min()+max_range+1],
                 title="PC "+str(settings.pcs[1]),
                 gridcolor='rgb(0, 0, 0)',
                 zerolinecolor='rgb(255, 0, 0)',
@@ -581,8 +581,8 @@ def plot_3d_pca(transformed_expression, annotation, settings, expression_table=N
                 backgroundcolor='#bababa'
             ),
             zaxis=dict(
-                range = [-settings.plot_dim[2], settings.plot_dim[2]],
-                # ~ range = [used_pcs.iloc[:,2].min()-1, used_pcs.iloc[:,2].min()+max_range+1],
+                # range = [-settings.plot_dim[2], settings.plot_dim[2]],
+                range = [used_pcs.iloc[:,2].min()-1, used_pcs.iloc[:,2].min()+max_range+1],
                 title="PC "+str(settings.pcs[2]),
                 gridcolor='rgb(0, 0, 0)',
                 zerolinecolor='rgb(255, 0, 0)',
@@ -592,8 +592,10 @@ def plot_3d_pca(transformed_expression, annotation, settings, expression_table=N
             aspectmode = 'manual'
         ),
     )
-    #
+    # ipdb.set_trace()
     comb = pd.concat([transformed_expression, annotation], axis=1)
+    # IPython.embed()
+
     #comb["name"] = comb["shape"]
     if "name" not in comb.columns:
         comb["name"] = comb["color"]+"_"+comb["shape"]
@@ -602,12 +604,15 @@ def plot_3d_pca(transformed_expression, annotation, settings, expression_table=N
     # allow coloring cells by quantile expression of supplied features
     if (feat_type == "g"):
         if (features is not None):
-
           markers = list(annotation["shape"].unique())
           mg = mygene.MyGeneInfo()
           # ~ for i in enumerate(features):
           gene_info = mg.querymany(features, scopes='symbol', fields='ensembl.transcript')[0]
-          if len(gene_info['ensembl']['transcript']) > 1:
+          if isinstance(gene_info['ensembl'], list):
+              trx = []
+              for i in gene_info['ensembl']:
+                  trx.extend(i['transcript'])
+          elif isinstance(gene_info['ensembl']['transcript'], list):
               trx = gene_info['ensembl']['transcript']
           else:
               trx = [gene_info['ensembl']['transcript']]
@@ -669,8 +674,14 @@ def plot_3d_pca(transformed_expression, annotation, settings, expression_table=N
             )
         data.append(trace)
     if(clusters != None):
+        # IPython.embed()
+        
+        if hasattr(settings, "centroids"):
+          centroids = settings.centroids
+        else:
+          centroids = get_cluster_centroids(transformed_expression, clusters)
+          centroids = centroids.loc[used_pcs.columns,:]
 
-        centroids = get_cluster_centroids(transformed_expression, clusters)
         trace = record_trace(clusters, comb, settings, centroids)
         data.append(trace)
 
@@ -989,14 +1000,14 @@ def find_pseudotime_plotnine(transformed_expression, annotation, pca, settings, 
     vals_shRBKD = transformed_expression.loc[shRBKD_cells,:]
 
     if len(shCtrl_cells) > 0 and len(shRBKD_cells) > 0:
-      t_val = []
+      t_vals = []
       for i in transformed_expression.iloc[:, :-1]:
-          test = (abs(vals_shCtrl.loc[:,i].mean()-vals_shRBKD.loc[:,i].mean()))/np.std(vals_shCtrl.loc[:,i].append(vals_shRBKD.loc[:,i]))
-          t_val.append(test)
+          t_val = (abs(vals_shCtrl.loc[:,i].mean()-vals_shRBKD.loc[:,i].mean()))/np.std(vals_shCtrl.loc[:,i].append(vals_shRBKD.loc[:,i]))
+          t_vals.append(t_val)
 
     #   distance (green) ------------------------------
       mydistance = {
-        'distance' : t_val,
+        'distance' : t_vals,
         'pc' : range(1,n_pca+1)
       }
       mydistance = pd.DataFrame(mydistance)
@@ -1089,9 +1100,11 @@ def calculate_pseudotime_using_cluster_times(PC_expression, annotation, clusters
 
     palette_size = int(input("What palette size would you like to use (how many colors)? "))
     calculate_on = list_from_ranges(input("Which PCs would you like to use for calculating pseudotime? [type comma separated list, list can also include ranges 1-5,8] "))
+    
     used_PC_expression = PC_expression[calculate_on]
 
     centroids = get_cluster_centroids(used_PC_expression, clusters)
+  
     sq_distances = pd.DataFrame(index=used_PC_expression.index, columns=[])
     weights = pd.DataFrame(index=used_PC_expression.index, columns=[])
     test = pd.DataFrame(index=used_PC_expression.index, columns=[])
@@ -1377,6 +1390,8 @@ def time_clusters_from_annotations(annotation):
 ## takes PCA transformed expression and list of clusters [(time, index_of_cells), ...]
 #  and returns centroid for each cluster
 def get_cluster_centroids(PC_expression, clusters):
+    # 
+  
     centroids = []
 
     for cl in clusters:
@@ -1650,6 +1665,7 @@ def assign_clusters_using_hierarch(subset_annotation, subset_PC_expression, sett
     if method not in scipy_linkage_methods:
         print("clustering method not supported (spelling error?)")
         return
+    # IPython.embed()
     if '' not in colval:
         linkage = sc.cluster.hierarchy.linkage(subset_PC_expression[cluster_on_pcs], method=method)
         clusters_without_time = get_cluster_labels(linkage, number_of_clusters, subset_PC_expression.index)
@@ -1731,7 +1747,7 @@ def print_clusters(clusters):
     #~ for i, (a, b) in enumerate(clusters):
         #~ enum_df = pd.DataFrame(clusters[i][1])
         #~ enum_df.columns = [str(a)]
-        #~ clusters_df = pd.concat([clusters_df, enum_df], axis=1)
+        #~ clusters_df = pd.concat(f[clusters_df, enum_df], axis=1)
 
 def print_dendro(dendros, method):
     oldd = dict(zip(dendros[method]['ivl'], dendros[method]['color_list']))
@@ -1750,9 +1766,10 @@ def retrieve_subset_param(sett):
     return colnm, colval
 
 def subset_pc_by_param(pc_expression, colnm, colval, annotation):
+    # ipdb.set_trace()
     if not all(colval):
         # ~ clusters_without_time = get_cluster_labels(linkage, number_of_clusters, subset_PC_expression.index)
-        # ~ cluster_colors = ["blue", "red", "orange", "purple", "green", "brown", "black", "gray", "lawngreen", "magenta", "lightpink", "indigo", "lightblue", "lightgoldenrod1", "mediumpurple2"]
+        # ~ cluster_colors = ["blue", "red", "orange", "purple", ""green", "brown", "black", "gray", "lawngreen", "magenta", "lightpink", "indigo", "lightblue", "lightgoldenrod1", "mediumpurple2"]
         # ~ change_annotation_colors_to_clusters(clusters_without_time, subset_annotation, cluster_colors)
         return annotation, pc_expression
     else:
@@ -1788,8 +1805,8 @@ def find_discrim_pcs(subset_pc_expression, annotation):
     vals_shCtrl = PC_expression.loc[shCtrl_cells,:]
 
     for i in range(1, 20):
-        test = (abs(vals_shCtrl.loc[:,i].mean()-vals_shRBKD.loc[:,i].mean()))/np.std(vals_shCtrl.loc[:,i].append(vals_shRBKD.loc[:,i]))
-        print(test)
+        t_val = (abs(vals_shCtrl.loc[:,i].mean()-vals_shRBKD.loc[:,i].mean()))/np.std(vals_shCtrl.loc[:,i].append(vals_shRBKD.loc[:,i]))
+        print(t_val)
 
 def normalize_centroids(subset_pc_expression):
     print("provide control group: ")

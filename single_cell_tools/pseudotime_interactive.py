@@ -22,6 +22,7 @@ from sc_pseudotime import *
 
 # ../script_shortcut.pkl
 parser = argparse.ArgumentParser(description="runs pseudotime_interactive")
+parser.add_argument("-x", "--experiment", dest="experiment", default="first", help="which experiment", metavar="EXPERIMENT")
 parser.add_argument("-e", "--expression-matrix", dest="expr_mat", default="../resources/2020-02-11-SHL/sunhye_census_matrix.csv", help="gene by cell matrix of expression values", metavar="EXPR")
 parser.add_argument("-c", "--cell-sets", dest="cell_sets", default="../resources/2020-02-11-SHL/New_cells_sets_3_6.csv", help="cell sets", metavar="CELL_SETS")
 parser.add_argument("-p", "--plot-settings", dest="plot_settings", default="../resources/2020-02-11-SHL/New_plot_settings_2d.csv", help="plot settings", metavar="PLOT_SETTINGS")
@@ -36,6 +37,30 @@ except SystemExit as err:
     parser.print_help()
     sys.exit(0)
     
+if options.experiment == "first":
+  parser.set_defaults(
+    expr_mat="../resources/2020-02-11-SHL/sunhye_census_matrix.csv",
+    cell_sets="../resources/2020-02-11-SHL/New_cells_sets_3_6.csv",
+    plot_settings="../resources/2020-02-11-SHL/New_plot_settings_2d.csv"
+    )
+
+elif options.experiment == "second":
+  parser.set_defaults(
+    # expr_mat="../resources/sunlee_input/2nd_experiment/sunhye_census_matrix-comma-delimited.csv",
+    expr_mat="../resources/sunlee_input/2nd_experiment/transcripts.tpm_census_matrix-comma-delimited.csv",
+    cell_sets="../resources/sunlee_input/2nd_experiment/cells_sets_Final.csv",
+    plot_settings="../resources/sunlee_input/2nd_experiment/plot_settings_2d_Final.csv"
+    )
+    
+elif options.experiment == "third":
+  parser.set_defaults(
+    expr_mat="../resources/sunlee_input/3rd_experiment/sunhye_census_matrix-comma-delimited.csv",
+    cell_sets="../resources/sunlee_input/3rd_experiment/cells_sets_Final.csv",
+    plot_settings="../resources/sunlee_input/3rd_experiment/plot_settings_2d_Final.csv"
+    )
+    
+options = parser.parse_args()
+
 if not options.loom_path is None:
   loom_path = os.path.expanduser(options.loom_path)
   # Crate an analysis object
@@ -112,34 +137,30 @@ while True:
     elif(action == "P"):
       colnm, colval = retrieve_subset_param(sett)
       sett.pcs = [int(i) for i in input("Which PCs would you like on the plot? (type comma separated list, such as 1,3,4) ").split(",")]
-      print("plotting...\n the plot will open in your web browser shortly")
       if colval != "":
         sett.subset = "param"
+        
       if (sett.subset == 'None'): 
+        print("plotting...\n the plot will open in your web browser shortly")
         fig = plot_3d_pca(PC_expression, annotation, sett, clusters = clusters)
       elif (sett.subset == 'param'):
-        
+        # ipdb.set_trace()
+        # IPython.embed()
         subset_annotation, subset_PC_expression = subset_pc_by_param(subset_PC_expression, colnm, colval, subset_annotation)
-        plot_3d_pca(subset_PC_expression, subset_annotation, sett, clusters = subset_clusters)
+        subset_preference = input("display excluded cells on plot (grayed out)? [y/n] ")
+        if subset_preference == "y":
+          colored_annotation = annotation
+          colored_annotation["color"] = "gray"
+          colored_annotation.loc[subset_annotation.index,"color"] = subset_annotation["color"]
+          subset_annotation = colored_annotation
+        # IPython.embed()
+        print("plotting...\n the plot will open in your web browser shortly")
+        # IPython.embed()
+        plot_3d_pca(PC_expression, subset_annotation, sett, clusters = subset_clusters)
+        # input_reset = input("reset settings to default? [y/n] ")
+        # if input_reset == "y":
         del subset_annotation, subset_PC_expression
         sett.subset = 'None'
-        # elif (sett.subset == 'param'):
-        #   
-        #     if (colval == colval):
-        #         plot_3d_pca(subset_PC_expression, subset_annotation, sett, clusters = subset_clusters)
-        #     elif set(colval).issubset(colval):
-        #         #~ 
-        #         old_colors = subset_annotation["color"]
-        #         
-        #         subset_annotation, subset_PC_expression = subset_pc_by_param(subset_PC_expression, colnm, colval)
-        #         subset_annotation.loc[:,"color"] = old_colors[old_colors.index.isin(subset_annotation.index)]
-        #         new_clusters = [(i, c[c.isin(subset_annotation.index)]) for i,c in subset_clusters]
-        #         plot_3d_pca(subset_PC_expression, subset_annotation, sett, clusters = new_clusters)
-        #         del subset_annotation, subset_PC_expression
-        #     else:
-        #         subset_annotation, subset_PC_expression = subset_pc_by_param(PC_expression, colnm, colval)
-        #         plot_3d_pca(subset_PC_expression, subset_annotation, sett, clusters = clusters)
-        #         del subset_annotation, subset_PC_expression
             
     elif(action == "L"):
       colnm, colval = retrieve_subset_param(sett)
@@ -184,9 +205,11 @@ while True:
       print(url)
         
     elif(action == "S"):
+      # ipdb.set_trace()
       colnm, colval = retrieve_subset_param(sett)
+      # IPython.embed()
       subset_annotation, subset_PC_expression = subset_pc_by_param(PC_expression, colnm, colval, annotation)
-      pseudotime, centroids = calculate_pseudotime_using_cluster_times(subset_PC_expression, subset_annotation, subset_clusters, sett)
+      pseudotime, sett.centroids = calculate_pseudotime_using_cluster_times(subset_PC_expression, subset_annotation, subset_clusters, sett)
       
     elif(action == "O"):
       cluster_source = input("retrieve clusters from 3d or all dimension clustering (3d, all)? ")
@@ -212,8 +235,8 @@ while True:
       #pal = [(int(i[0]*256),int(i[1]*256),int(i[2]*256)) for i in pal]
       bin_colors = ["grey", "blue", "#21f2e4", "orange", "red", "#51040a"]
       bin_col_dict = dict(zip(range(0,bins), bin_colors))
-	#bin_colors = cl.to_rgb(pal)
-        #bin_col_dict = dict(zip(range(0,bins), bin_colors))
+      # bin_colors = cl.to_rgb(pal)
+      # bin_col_dict = dict(zip(range(0,bins), bin_colors))
       if feat_type == "g":
         for i in features:
           plot_3d_pca(subset_PC_expression, subset_annotation, sett, clusters = clusters, features=i, bin_col_dict=bin_col_dict, expression_table=expression_table, feat_type = feat_type)
@@ -304,6 +327,7 @@ while True:
       pickle.dump(settings_dict, f)
       print("settings saved to " + pickle_file)
       f.close()     
+      
       
     elif(action == "I"):
       IPython.embed()
